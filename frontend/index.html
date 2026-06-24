@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flash Delivery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+  <link rel="stylesheet" href="css/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+
+<body>
+
+  <div id="toast-container"></div>
+
+  <!-- ═══ LOGIN / REGISTER ══════════════════════════════════════════ -->
+  <div id="page-login" class="page auth-page active">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <span class="logo-icon"></span>
+        <h1>Flash<span>Delivery</span></h1>
+        <p>Envíos de última milla — rápidos y seguros</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-tab="login" onclick="switchAuthTab('login')">Iniciar Sesión</button>
+        <button class="auth-tab" data-tab="register" onclick="switchAuthTab('register')">Registrarse</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div id="login-form-container">
+        <div class="form-group">
+          <label>Correo electrónico</label>
+          <input id="login-email" type="email" placeholder="correo@ejemplo.com" />
+        </div>
+        <div class="form-group">
+          <label>Contraseña</label>
+          <input id="login-password" type="password" placeholder="••••••••"
+            onkeydown="if(event.key==='Enter') login()" />
+        </div>
+        <button id="btn-login" class="btn btn-primary" onclick="login()">Iniciar Sesión</button>
+        <div class="auth-switch">¿No tienes cuenta? <a onclick="switchAuthTab('register')">Regístrate aquí</a></div>
+      </div>
+
+      <!-- REGISTER -->
+      <div id="register-form-container" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nombre completo</label>
+            <input id="reg-name" type="text" placeholder="Tu nombre" />
+          </div>
+          <div class="form-group">
+            <label>Correo electrónico</label>
+            <input id="reg-email" type="email" placeholder="correo@ejemplo.com" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Contraseña</label>
+          <input id="reg-password" type="password" placeholder="Mínimo 6 caracteres" />
+        </div>
+        <div class="form-group">
+          <label>Tipo de cuenta</label>
+          <select id="reg-role" onchange="toggleVehicle()">
+            <option value="cliente">Cliente — Necesito enviar paquetes</option>
+            <option value="repartidor">Repartidor — Quiero hacer entregas</option>
+          </select>
+        </div>
+        <div class="form-group" id="vehicle-group" style="display:none">
+          <label>Tipo de vehículo</label>
+          <input id="reg-vehicle" type="text" placeholder="Ej: Moto Honda, Bicicleta, Pick-up..." />
+        </div>
+        <button id="btn-register" class="btn btn-primary" onclick="register()">Crear Cuenta</button>
+        <div class="auth-switch">¿Ya tienes cuenta? <a onclick="switchAuthTab('login')">Inicia sesión</a></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CLIENTE DASHBOARD ════════════════════════════════════════ -->
+  <div id="page-client" class="page">
+    <nav class="navbar">
+      <div class="navbar-brand">Flash<span>Delivery</span></div>
+      <div class="navbar-actions">
+        <span class="role-badge">Cliente</span>
+        <span class="user-chip" id="client-name-chip"></span>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
+      </div>
+    </nav>
+
+    <div class="main-content">
+      <div class="profile-card">
+        <div class="profile-avatar" id="client-avatar">C</div>
+        <div class="profile-info">
+          <h2 id="client-name">Cliente</h2>
+          <p id="client-email">correo@ejemplo.com</p>
+        </div>
+      </div>
+
+      <!-- Formulario nuevo envío -->
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">
+            Nuevo Envío
+            <small>Solicita un repartidor para tu paquete</small>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Origen</label>
+            <input id="input-origin" type="text" placeholder="Ej: Zona 10, Guatemala" />
+          </div>
+          <div class="form-group">
+            <label>Destino</label>
+            <input id="input-destination" type="text" placeholder="Ej: Zona 1, Guatemala" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Descripción del paquete</label>
+            <input id="input-description" type="text" placeholder="Ej: Laptop en caja, Documentos..." />
+          </div>
+          <div class="form-group">
+            <label>Distancia estimada (km)</label>
+            <input id="input-km" type="number" min="0.1" step="0.1" placeholder="Ej: 5.5" />
+          </div>
+        </div>
+        <div class="price-preview">
+          <div class="price-label">Tarifa estimada (km × Q5.00)</div>
+          <div class="price-amount" id="price-amount">Q 0.00</div>
+          <div class="price-formula" id="price-formula">0 km × Q5.00</div>
+        </div>
+        <button id="btn-create-delivery" class="btn btn-primary" onclick="createDelivery()">
+          Solicitar Envío
+        </button>
+      </div>
+
+      <!-- Lista de envíos -->
+      <div class="section-header" style="margin-top:24px">
+        <div class="section-title">Mis Envíos<small>Historial de todos tus pedidos</small></div>
+        <button class="btn btn-ghost btn-sm" onclick="refreshDeliveries()">Actualizar</button>
+      </div>
+      <div id="client-deliveries-list"></div>
+    </div>
+  </div>
+
+  <!-- ═══ REPARTIDOR DASHBOARD ══════════════════════════════════════ -->
+  <div id="page-driver" class="page">
+    <nav class="navbar">
+      <div class="navbar-brand">Flash<span>Delivery</span></div>
+      <div class="navbar-actions">
+        <span class="role-badge" style="background:var(--blue)">Repartidor</span>
+        <span class="user-chip" id="driver-name-chip"></span>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
+      </div>
+    </nav>
+
+    <div class="main-content">
+      <div class="profile-card">
+        <div class="profile-avatar" id="driver-avatar">R</div>
+        <div class="profile-info">
+          <h2 id="driver-name">Repartidor</h2>
+          <p id="driver-email">correo@ejemplo.com</p>
+        </div>
+      </div>
+
+      <div class="section-header">
+        <div class="section-title">Tablero de Pedidos<small>Pedidos disponibles y tus envíos activos</small></div>
+        <button class="btn btn-ghost btn-sm" onclick="refreshDeliveries()">Actualizar</button>
+      </div>
+      <div id="driver-deliveries-list"></div>
+    </div>
+  </div>
+
+  <!-- Modal de Calificación -->
+  <div id="modal-rating" class="modal-overlay">
+    <div class="modal">
+      <h3>Califica tu entrega</h3>
+      <p style="color:var(--gray);font-size:0.875rem;margin-bottom:16px">
+        ¿Cómo fue tu experiencia con el repartidor?
+      </p>
+      <div class="stars">
+        <button class="star-btn" data-value="1">★</button>
+        <button class="star-btn" data-value="2">★</button>
+        <button class="star-btn" data-value="3">★</button>
+        <button class="star-btn" data-value="4">★</button>
+        <button class="star-btn" data-value="5">★</button>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-submit-rating" class="btn btn-primary" onclick="submitRating()" style="flex:1">
+          Enviar calificación
+        </button>
+        <button class="btn btn-ghost" onclick="closeRatingModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+
+</html>
