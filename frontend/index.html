@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
   <link rel="stylesheet" href="css/styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -73,6 +74,18 @@
           <label>Tipo de vehículo</label>
           <input id="reg-vehicle" type="text" placeholder="Ej: Moto Honda, Bicicleta, Pick-up..." />
         </div>
+        <div class="form-group">
+          <label>Foto de perfil <span style="color:var(--gray);font-size:0.8rem">(opcional)</span></label>
+          <input id="reg-photo" type="file" accept="image/*" onchange="previewRegisterPhoto(this)" />
+          <div id="reg-photo-preview" style="display:none;margin-top:8px">
+            <img id="reg-photo-img" src="" alt="Vista previa"
+              style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--primary)" />
+            <div class="preview-meta">
+              <strong>Imagen seleccionada</strong>
+              <span id="reg-photo-name"></span>
+            </div>
+          </div>
+        </div>
         <button id="btn-register" class="btn btn-primary" onclick="register()">Crear Cuenta</button>
         <div class="auth-switch">¿Ya tienes cuenta? <a onclick="switchAuthTab('login')">Inicia sesión</a></div>
       </div>
@@ -86,6 +99,7 @@
       <div class="navbar-actions">
         <span class="role-badge">Cliente</span>
         <span class="user-chip" id="client-name-chip"></span>
+        <button class="btn btn-ghost btn-sm" onclick="showProfilePage()">Mi Perfil</button>
         <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
       </div>
     </nav>
@@ -153,6 +167,7 @@
       <div class="navbar-actions">
         <span class="role-badge" style="background:var(--blue)">Repartidor</span>
         <span class="user-chip" id="driver-name-chip"></span>
+        <button class="btn btn-ghost btn-sm" onclick="showProfilePage()">Mi Perfil</button>
         <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
       </div>
     </nav>
@@ -171,6 +186,124 @@
         <button class="btn btn-ghost btn-sm" onclick="refreshDeliveries()">Actualizar</button>
       </div>
       <div id="driver-deliveries-list"></div>
+    </div>
+  </div>
+
+  <!-- ═══ ADMIN DASHBOARD ═══════════════════════════════════════════ -->
+  <div id="page-admin" class="page">
+    <nav class="navbar">
+      <div class="navbar-brand">Flash<span>Delivery</span></div>
+      <div class="navbar-actions">
+        <span class="role-badge" style="background:#7c3aed">Admin</span>
+        <span class="user-chip" id="admin-name-chip"></span>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
+      </div>
+    </nav>
+    <div class="main-content">
+
+      <!-- KPIs -->
+      <div class="section-title" style="margin-bottom:16px">Panel de Reportes<small>Métricas generales del
+          sistema</small></div>
+      <div id="admin-kpis" class="admin-kpis"></div>
+
+      <!-- Gráficas -->
+      <div class="admin-charts">
+        <div class="card">
+          <div class="section-title" style="margin-bottom:16px">Pedidos por Estado</div>
+          <div style="max-width:280px;margin:0 auto">
+            <canvas id="chart-status"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-title" style="margin-bottom:16px">Top Repartidores (pedidos completados)</div>
+          <canvas id="chart-drivers"></canvas>
+        </div>
+      </div>
+
+      <!-- Tablas -->
+      <div class="admin-tables">
+        <div class="card">
+          <div class="section-title" style="margin-bottom:16px">Top Repartidores</div>
+          <div id="admin-drivers-table"></div>
+        </div>
+        <div class="card">
+          <div class="section-title" style="margin-bottom:16px">Top Clientes</div>
+          <div id="admin-clients-table"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ PERFIL ════════════════════════════════════════════════════ -->
+  <div id="page-profile" class="page">
+    <nav class="navbar">
+      <div class="navbar-brand">Flash<span>Delivery</span></div>
+      <div class="navbar-actions">
+        <button class="btn btn-ghost btn-sm" onclick="goBackFromProfile()">← Volver</button>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
+      </div>
+    </nav>
+
+    <div class="main-content">
+      <div class="card" style="max-width:480px;margin:0 auto">
+        <div class="section-title" style="margin-bottom:24px">Mi Perfil</div>
+
+        <!-- Foto de perfil -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-bottom:24px">
+          <div id="profile-photo-container" style="position:relative;width:96px;height:96px">
+            <div id="profile-avatar-big"
+              style="width:96px;height:96px;border-radius:50%;background:var(--primary);color:white;font-size:2rem;font-weight:700;display:flex;align-items:center;justify-content:center">
+            </div>
+            <img id="profile-photo-img" src="" alt="Foto de perfil"
+              style="display:none;width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid var(--primary)" />
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+            <input id="profile-photo-input" type="file" accept="image/*" style="display:none"
+              onchange="uploadProfilePhoto(this)" />
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('profile-photo-input').click()">
+              Cambiar foto
+            </button>
+            <span id="profile-photo-status" style="font-size:0.78rem;color:var(--gray)"></span>
+          </div>
+        </div>
+
+        <!-- Datos del usuario -->
+        <div class="profile-fields">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nombre</label>
+              <input id="profile-name" type="text" placeholder="Tu nombre" />
+            </div>
+            <div class="form-group">
+              <label>Correo</label>
+              <input id="profile-email" type="email" placeholder="correo@ejemplo.com" />
+            </div>
+          </div>
+
+          <div class="form-row" id="profile-vehicle-row" style="display:none">
+            <div class="form-group">
+              <label>Vehículo</label>
+              <input id="profile-vehicle" type="text" placeholder="Ej: Moto Honda" />
+            </div>
+          </div>
+
+          <div class="profile-meta-grid">
+            <div class="meta-item">
+              <span class="meta-label">Rol</span>
+              <span class="meta-value" id="profile-role"></span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Miembro desde</span>
+              <span class="meta-value" id="profile-since"></span>
+            </div>
+          </div>
+
+          <div class="profile-actions">
+            <button id="btn-save-profile" class="btn btn-primary" onclick="saveProfile()">Guardar cambios</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 

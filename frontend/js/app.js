@@ -4,6 +4,9 @@ const API = '/api';
 let currentUser = null;
 let selectedRating = 0;
 let ratingDeliveryId = null;
+let previousPage = null; // para saber a qué dashboard volver desde el perfil
+let adminStatusChart = null;
+let adminDriversChart = null;
 
 // ── UTILS ──────────────────────────────────────────────────────
 function getToken() { return localStorage.getItem('fd_token'); }
@@ -56,6 +59,12 @@ function starsHTML(rating) {
 
 function formatDate(d) {
   return new Date(d).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+// Muestra la foto de perfil en el avatar de la navbar/dashboard
+function renderAvatarPhoto(avatarEl, photoUrl, fallbackLetter) {
+  const src = photoUrl || 'img/default-avatar.png';
+  avatarEl.innerHTML = `<img src="${src}" alt="Foto" style="width:100%;height:100%;border-radius:50%;object-fit:cover" />`;
 }
 
 // ── INIT ───────────────────────────────────────────────────────
@@ -113,6 +122,19 @@ window.toggleVehicle = function () {
     document.getElementById('reg-role').value === 'repartidor' ? 'block' : 'none';
 };
 
+// Vista previa de foto en el formulario de registro
+window.previewRegisterPhoto = function (input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('reg-photo-img').src = e.target.result;
+    document.getElementById('reg-photo-name').textContent = file.name;
+    document.getElementById('reg-photo-preview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+};
+
 window.login = async function () {
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
@@ -135,21 +157,38 @@ window.login = async function () {
   }
 };
 
+// Register usa FormData porque envía imagen
 window.register = async function () {
   const name = document.getElementById('reg-name').value.trim();
   const email = document.getElementById('reg-email').value.trim();
   const password = document.getElementById('reg-password').value;
   const role = document.getElementById('reg-role').value;
   const vehicle = document.getElementById('reg-vehicle').value.trim();
+  const photo = document.getElementById('reg-photo').files[0];
   const btn = document.getElementById('btn-register');
 
   if (!name || !email || !password) return toast('Completa todos los campos', 'error');
   if (role === 'repartidor' && !vehicle) return toast('Ingresa tu tipo de vehículo', 'error');
 
+  const formData = new FormData();
+  formData.append('name', name);
+  formData.append('email', email);
+  formData.append('password', password);
+  formData.append('role', role);
+  if (vehicle) formData.append('vehicle', vehicle);
+  if (photo) formData.append('photo', photo);
+
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Registrando...';
   try {
-    const data = await apiFetch('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password, role, vehicle }) });
+    // Sin Content-Type: el browser lo asigna automáticamente con el boundary correcto
+    const res = await fetch(`${API}/auth/register`, {
+      method: 'POST',
+      headers: { 'Authorization': getToken() ? `Bearer ${getToken()}` : '' },
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error de servidor');
     setToken(data.token);
     currentUser = data.user;
     toast(`¡Cuenta creada! Bienvenido, ${currentUser.name}!`, 'success');
@@ -170,16 +209,19 @@ window.logout = function () {
 
 // ── APP ENTRY ──────────────────────────────────────────────────
 function enterApp() {
-  if (currentUser.role === 'cliente') showClientDashboard();
+  if (currentUser.role === 'admin') showAdminDashboard();
+  else if (currentUser.role === 'cliente') showClientDashboard();
   else showDriverDashboard();
 }
 
 // ── CLIENTE ────────────────────────────────────────────────────
 async function showClientDashboard() {
   showPage('page-client');
+  previousPage = 'page-client';
   document.getElementById('client-name').textContent = currentUser.name;
   document.getElementById('client-email').textContent = currentUser.email;
-  document.getElementById('client-avatar').textContent = currentUser.name[0].toUpperCase();
+  const avatarEl = document.getElementById('client-avatar');
+  renderAvatarPhoto(avatarEl, currentUser.photo_url, currentUser.name[0].toUpperCase());
   await loadClientDeliveries();
 }
 
@@ -273,9 +315,11 @@ window.createDelivery = async function () {
 // ── REPARTIDOR ─────────────────────────────────────────────────
 async function showDriverDashboard() {
   showPage('page-driver');
+  previousPage = 'page-driver';
   document.getElementById('driver-name').textContent = currentUser.name;
   document.getElementById('driver-email').textContent = currentUser.email + (currentUser.vehicle ? ` · ${currentUser.vehicle}` : '');
-  document.getElementById('driver-avatar').textContent = currentUser.name[0].toUpperCase();
+  const avatarEl = document.getElementById('driver-avatar');
+  renderAvatarPhoto(avatarEl, currentUser.photo_url, currentUser.name[0].toUpperCase());
   await loadDriverDeliveries();
 }
 
@@ -291,7 +335,7 @@ async function loadDriverDeliveries() {
 function renderDriverDeliveries(deliveries) {
   const list = document.getElementById('driver-deliveries-list');
   if (!deliveries.length) {
-    list.innerHTML = `<div class="empty-state"><span class="empty-icon">�</span><h3>Sin pedidos disponibles</h3><p>Refresca para ver nuevos pedidos.</p></div>`;
+    list.innerHTML = `<div class="empty-state"><span class="empty-icon">📦</span><h3>Sin pedidos disponibles</h3><p>Refresca para ver nuevos pedidos.</p></div>`;
     return;
   }
   const mine = deliveries.filter(d => d.driver_id == currentUser.id);
@@ -361,4 +405,279 @@ window.refreshDeliveries = async function () {
   if (currentUser.role === 'cliente') await loadClientDeliveries();
   else await loadDriverDeliveries();
   toast('Lista actualizada', 'success');
+};
+
+// ── ADMIN ──────────────────────────────────────────────────────
+async function showAdminDashboard() {
+  showPage('page-admin');
+  previousPage = 'page-admin';
+  document.getElementById('admin-name-chip').textContent = currentUser.name;
+  await loadAdminDashboard();
+}
+
+async function loadAdminDashboard() {
+  const kpisEl = document.getElementById('admin-kpis');
+  const driversTableEl = document.getElementById('admin-drivers-table');
+  const clientsTableEl = document.getElementById('admin-clients-table');
+
+  kpisEl.innerHTML = '<p style="color:var(--gray);text-align:center;padding:20px">Cargando métricas...</p>';
+  driversTableEl.innerHTML = '<p style="color:var(--gray);text-align:center;padding:20px">Cargando repartidores...</p>';
+  clientsTableEl.innerHTML = '<p style="color:var(--gray);text-align:center;padding:20px">Cargando clientes...</p>';
+
+  try {
+    const [stats, topDrivers, topClients] = await Promise.all([
+      apiFetch('/admin/stats'),
+      apiFetch('/admin/top-drivers'),
+      apiFetch('/admin/top-clients')
+    ]);
+
+    renderAdminKpis(stats);
+    renderAdminCharts(stats, topDrivers.drivers || []);
+    renderAdminDriversTable(topDrivers.drivers || []);
+    renderAdminClientsTable(topClients.clients || []);
+  } catch (err) {
+    kpisEl.innerHTML = '';
+    driversTableEl.innerHTML = '';
+    clientsTableEl.innerHTML = '';
+    toast(err.message, 'error');
+  }
+}
+
+function renderAdminKpis(stats) {
+  const container = document.getElementById('admin-kpis');
+  const cards = [
+    { label: 'Clientes', value: stats.totalClientes ?? 0, color: 'var(--orange)' },
+    { label: 'Repartidores', value: stats.totalRepartidores ?? 0, color: 'var(--blue)' },
+    { label: 'Pendientes', value: stats.pedidosPendientes ?? 0, color: 'var(--yellow)' },
+    { label: 'En camino', value: stats.pedidosEnCamino ?? 0, color: 'var(--blue)' },
+    { label: 'Entregados', value: stats.pedidosEntregados ?? 0, color: 'var(--green)' },
+    { label: 'Ingresos', value: `Q ${Number(stats.totalIngresos || 0).toFixed(2)}`, color: 'var(--green)' },
+    { label: 'Km totales', value: `${Number(stats.totalKm || 0).toFixed(1)} km`, color: 'var(--dark)' }
+  ];
+
+  container.className = 'admin-kpis';
+  container.innerHTML = cards.map(card => `
+    <div class="card admin-kpi-card">
+      <div class="admin-kpi-label">${card.label}</div>
+      <div class="admin-kpi-value" style="color:${card.color}">${card.value}</div>
+    </div>
+  `).join('');
+}
+
+function renderAdminCharts(stats, drivers) {
+  const statusCanvas = document.getElementById('chart-status');
+  const driversCanvas = document.getElementById('chart-drivers');
+
+  if (adminStatusChart) adminStatusChart.destroy();
+  if (adminDriversChart) adminDriversChart.destroy();
+
+  adminStatusChart = new Chart(statusCanvas, {
+    type: 'doughnut',
+    data: {
+      labels: ['Pendientes', 'En camino', 'Entregados'],
+      datasets: [{
+        data: [stats.pedidosPendientes || 0, stats.pedidosEnCamino || 0, stats.pedidosEntregados || 0],
+        backgroundColor: ['#f59e0b', '#3b82f6', '#10b981'],
+        borderWidth: 0,
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom' }
+      }
+    }
+  });
+
+  const driverLabels = drivers.slice(0, 8).map(d => d.name);
+  const driverValues = drivers.slice(0, 8).map(d => Number(d.pedidos_completados || 0));
+
+  adminDriversChart = new Chart(driversCanvas, {
+    type: 'bar',
+    data: {
+      labels: driverLabels,
+      datasets: [{
+        label: 'Pedidos completados',
+        data: driverValues,
+        backgroundColor: '#FF6B00',
+        borderRadius: 8,
+        maxBarThickness: 36
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { precision: 0 }
+        }
+      }
+    }
+  });
+}
+
+function renderAdminDriversTable(drivers) {
+  const container = document.getElementById('admin-drivers-table');
+  if (!drivers.length) {
+    container.innerHTML = '<div class="empty-state"><h3>Sin datos</h3><p>No hay repartidores para mostrar.</p></div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="admin-table admin-table-drivers">
+      <div class="admin-table-head admin-table-head-drivers">
+        <span>Repartidor</span><span>Vehículo</span><span>Completados</span><span>Km</span><span>Promedio</span>
+      </div>
+      ${drivers.map(driver => `
+        <div class="admin-table-row admin-table-row-drivers">
+          <span>${driver.name}</span>
+          <span>${driver.vehicle || '—'}</span>
+          <span>${driver.pedidos_completados || 0}</span>
+          <span>${Number(driver.km_totales || 0).toFixed(1)}</span>
+          <span>${Number(driver.calificacion_promedio || 0).toFixed(1)}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderAdminClientsTable(clients) {
+  const container = document.getElementById('admin-clients-table');
+  if (!clients.length) {
+    container.innerHTML = '<div class="empty-state"><h3>Sin datos</h3><p>No hay clientes para mostrar.</p></div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="admin-table admin-table-clients">
+      <div class="admin-table-head admin-table-head-clients">
+        <span>Cliente</span><span>Pedidos</span><span>Gasto</span><span>Km</span>
+      </div>
+      ${clients.map(client => `
+        <div class="admin-table-row admin-table-row-clients">
+          <span>${client.name}</span>
+          <span>${client.pedidos_realizados || 0}</span>
+          <span>Q ${Number(client.gasto_total || 0).toFixed(2)}</span>
+          <span>${Number(client.km_totales || 0).toFixed(1)}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ── PERFIL ─────────────────────────────────────────────────────
+window.showProfilePage = function () {
+  showPage('page-profile');
+
+  // Foto grande
+  const img = document.getElementById('profile-photo-img');
+  const avatarBig = document.getElementById('profile-avatar-big');
+  img.src = currentUser.photo_url || '/img/default-avatar.png';
+  img.style.display = 'block';
+  avatarBig.style.display = 'none';
+
+  // Datos
+  document.getElementById('profile-name').value = currentUser.name || '';
+  document.getElementById('profile-email').value = currentUser.email || '';
+  document.getElementById('profile-role').textContent =
+    currentUser.role === 'cliente' ? 'Cliente' : currentUser.role === 'repartidor' ? 'Repartidor' : 'Administrador';
+
+  const vehicleRow = document.getElementById('profile-vehicle-row');
+  if (currentUser.role === 'repartidor') {
+    vehicleRow.style.display = 'grid';
+    document.getElementById('profile-vehicle').value = currentUser.vehicle || '';
+  } else {
+    vehicleRow.style.display = 'none';
+  }
+
+  document.getElementById('profile-since').textContent =
+    currentUser.created_at ? formatDate(currentUser.created_at) : '—';
+
+  document.getElementById('profile-photo-status').textContent = '';
+};
+
+window.saveProfile = async function () {
+  const name = document.getElementById('profile-name').value.trim();
+  const email = document.getElementById('profile-email').value.trim();
+  const vehicleInput = document.getElementById('profile-vehicle');
+  const vehicle = vehicleInput ? vehicleInput.value.trim() : '';
+  const btn = document.getElementById('btn-save-profile');
+
+  if (!name || !email) return toast('Nombre y correo son obligatorios', 'error');
+
+  const payload = { name, email };
+  if (currentUser.role === 'repartidor') payload.vehicle = vehicle;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Guardando...';
+  try {
+    const data = await apiFetch('/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    });
+
+    currentUser = data.user;
+    toast('Perfil actualizado', 'success');
+    showProfilePage();
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Guardar cambios';
+  }
+};
+
+window.goBackFromProfile = function () {
+  if (previousPage === 'page-admin') showAdminDashboard();
+  else if (previousPage === 'page-driver') showDriverDashboard();
+  else showClientDashboard();
+};
+
+// Subir nueva foto de perfil
+window.uploadProfilePhoto = async function (input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const statusEl = document.getElementById('profile-photo-status');
+  statusEl.textContent = 'Subiendo...';
+
+  const formData = new FormData();
+  formData.append('photo', file);
+
+  try {
+    const res = await fetch(`${API}/auth/profile`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error de servidor');
+
+    // Actualizar usuario en memoria
+    currentUser = data.user;
+
+    // Actualizar foto en la página de perfil
+    const img = document.getElementById('profile-photo-img');
+    const avatarBig = document.getElementById('profile-avatar-big');
+    img.src = data.user.photo_url;
+    img.style.display = 'block';
+    avatarBig.style.display = 'none';
+
+    // Actualizar avatar en el dashboard correspondiente
+    if (currentUser.role === 'cliente') {
+      renderAvatarPhoto(document.getElementById('client-avatar'), currentUser.photo_url, currentUser.name[0].toUpperCase());
+    } else {
+      renderAvatarPhoto(document.getElementById('driver-avatar'), currentUser.photo_url, currentUser.name[0].toUpperCase());
+    }
+
+    statusEl.textContent = 'Foto actualizada ✓';
+    toast('Foto de perfil actualizada', 'success');
+  } catch (err) {
+    statusEl.textContent = '';
+    toast(err.message, 'error');
+  }
 };
